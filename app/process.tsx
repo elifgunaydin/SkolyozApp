@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView, Alert, TextInput } from 'react-native';
 import { Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '../services/supabase'; // Supabase bağlantısı eklendi
 
 export default function ProcessScreen() {
   const [image, setImage] = useState<string | null>(null);
+  const [patientName, setPatientName] = useState(''); // Hasta adı state'i
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<{ angle: number; risk: string } | null>(null);
+  const [result, setResult] = useState<{ angle: number; risk: string; riskColor: string } | null>(null);
 
   // Galeriden Fotoğraf Seçme
   const pickImage = async () => {
-    // Önce galeri izni iste
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('İzin Gerekli', 'Galerinize erişmek için izin vermeniz gerekiyor.');
@@ -19,19 +20,18 @@ export default function ProcessScreen() {
 
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, // Kullanıcı fotoğrafı kırpabilsin
-      quality: 0.8, // Sunucuya hızlı gitsin diye boyutu hafif sıkıştırıyoruz
+      allowsEditing: true,
+      quality: 0.8,
     });
 
     if (!result.canceled) {
       setImage(result.assets[0].uri);
-      setResult(null); // Yeni resim seçilirse eski sonucu temizle
+      setResult(null);
     }
   };
 
   // Kameradan Fotoğraf Çekme
   const takePhoto = async () => {
-    // Önce kamera izni iste
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('İzin Gerekli', 'Kameranıza erişmek için izin vermeniz gerekiyor.');
@@ -49,24 +49,94 @@ export default function ProcessScreen() {
     }
   };
 
-  // Yapay Zekaya Gönderme Simülasyonu
-  const handleAnalyze = () => {
+  // GERÇEK YAPAY ZEKA VE VERİTABANI ENTEGRASYONU
+  const handleAnalyze = async () => {
     if (!image) {
       Alert.alert('Eksik İşlem', 'Lütfen önce bir röntgen görüntüsü seçin.');
       return;
     }
 
+    if (!patientName.trim()) {
+      Alert.alert('Eksik Bilgi', 'Lütfen hasta adını giriniz.');
+      return;
+    }
+
     setIsAnalyzing(true);
 
-    // FLASK API ENTEGRASYONU BURAYA GELECEK
-    // Şimdilik 2.5 saniye bekleyip sahte bir sonuç üretiyoruz
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      setResult({
-        angle: 18.4, // Örnek Cobb açısı
-        risk: 'Hafif Derece Skolyoz',
+    try {
+      // 1. Görüntüyü Flask API'nin okuyabileceği formata (FormData) çevir
+      const formData = new FormData();
+      formData.append('file', {
+        uri: image,
+        name: 'xray.jpg',
+        type: 'image/jpeg',
+      } as any);
+
+      // 2. Flask API'ye İstek At (IP adresini kendi bilgisayarının IP'si ile değiştirmeyi unutma)
+      const apiResponse = await fetch('http://172.20.10.2:5000/api/analyze', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-    }, 2500);
+
+      const aiData = await apiResponse.json();
+
+      if (!aiData.success) {
+        throw new Error(aiData.error || 'Yapay zeka analizinde hata oluştu.');
+      }
+
+      // 3. Oturumu açık olan kullanıcıyı al
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error('Kullanıcı oturumu bulunamadı.');
+
+      // 4. Görüntüyü Supabase Storage'a Yükle (images bucket'ına)
+      const response = await fetch(image);
+      const blob = await response.blob();
+      const uniqueFileName = `${user.id}_${Date.now()}.jpg`;
+
+      const { error: storageError } = await supabase.storage
+        .from('images')
+        .upload(uniqueFileName, blob, {
+          contentType: 'image/jpeg',
+        });
+
+      if (storageError) throw new Error('Fotoğraf buluta yüklenemedi.');
+
+      // Yüklenen fotoğrafın Public URL'ini al
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(uniqueFileName);
+
+      // 5. Veritabanına (Image veya image tablosu) Kaydet
+      // Not: PostgreSQL tablo adında büyük/küçük harfe duyarlıdır. Web tarafında tablonun adı "image" veya "Image" olabilir.
+      // 5. Veritabanına Kaydet
+      const { error: dbError } = await supabase
+        .from('image') // Tablo adından emin ol!
+        .insert({
+          filename: publicUrl,
+          user_id: user.id,
+          patient_name: patientName,
+        });
+
+      if (dbError) {
+        console.log("Supabase Veritabanı Hatası:", dbError);
+        throw new Error(`Veritabanı hatası: ${dbError.message}`);
+      }
+
+      // 6. Sonuçları Ekranda Göster
+      setResult({
+        angle: parseFloat(Number(aiData.data.cobb_angle).toFixed(1)),
+        risk: aiData.data.diagnosis,
+        riskColor: aiData.data.diagnosis_color,
+      });
+
+    } catch (error: any) {
+      Alert.alert('Hata', error.message || 'Bir sorun oluştu.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -76,9 +146,18 @@ export default function ProcessScreen() {
       <View style={styles.headerBox}>
         <Text style={styles.title}>Yeni Analiz</Text>
         <Text style={styles.subtitle}>
-          Hastaya ait Ön-Arka (AP) omurga röntgenini sisteme yükleyin. Görüntü net ve dik açıyla çekilmiş olmalıdır.
+          Hastaya ait Ön-Arka (AP) omurga röntgenini sisteme yükleyin.
         </Text>
       </View>
+
+      {/* Hasta Adı Girişi */}
+      <TextInput
+        style={styles.input}
+        placeholder="Hasta Adı ve Soyadı"
+        value={patientName}
+        onChangeText={setPatientName}
+        editable={!isAnalyzing}
+      />
 
       {/* Görüntü Seçme Alanı */}
       <View style={styles.imageContainer}>
@@ -94,34 +173,34 @@ export default function ProcessScreen() {
 
       {/* Butonlar */}
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.actionButton} onPress={takePhoto}>
+        <TouchableOpacity style={styles.actionButton} onPress={takePhoto} disabled={isAnalyzing}>
           <Text style={styles.actionButtonText}>📷 Kamera</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton} onPress={pickImage}>
+        <TouchableOpacity style={styles.actionButton} onPress={pickImage} disabled={isAnalyzing}>
           <Text style={styles.actionButtonText}>🖼️ Galeri</Text>
         </TouchableOpacity>
       </View>
 
       {/* Analiz Et Butonu */}
       <TouchableOpacity 
-        style={[styles.analyzeButton, !image && styles.analyzeButtonDisabled]} 
+        style={[styles.analyzeButton, (!image || !patientName.trim()) && styles.analyzeButtonDisabled]} 
         onPress={handleAnalyze}
-        disabled={isAnalyzing || !image}
+        disabled={isAnalyzing || !image || !patientName.trim()}
       >
         {isAnalyzing ? (
           <View style={styles.analyzingBox}>
             <ActivityIndicator color="#fff" size="small" />
-            <Text style={styles.analyzeButtonText}> AI İşliyor...</Text>
+            <Text style={styles.analyzeButtonText}> Yapay Zeka İşliyor...</Text>
           </View>
         ) : (
-          <Text style={styles.analyzeButtonText}>🤖 Yapay Zeka ile Analiz Et</Text>
+          <Text style={styles.analyzeButtonText}>🤖 Analiz Et ve Kaydet</Text>
         )}
       </TouchableOpacity>
 
       {/* Sonuç Kartı */}
       {result && (
-        <View style={styles.resultCard}>
+        <View style={[styles.resultCard, { borderLeftColor: result.riskColor }]}>
           <Text style={styles.resultTitle}>Analiz Sonucu</Text>
           <View style={styles.resultRow}>
             <Text style={styles.resultLabel}>Hesaplanan Cobb Açısı:</Text>
@@ -129,11 +208,10 @@ export default function ProcessScreen() {
           </View>
           <View style={styles.resultRow}>
             <Text style={styles.resultLabel}>Durum:</Text>
-            <Text style={styles.resultRisk}>{result.risk}</Text>
+            <Text style={[styles.resultRisk, { color: result.riskColor }]}>{result.risk}</Text>
           </View>
         </View>
       )}
-
     </ScrollView>
   );
 }
@@ -147,7 +225,7 @@ const styles = StyleSheet.create({
   },
   headerBox: {
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   title: {
     fontSize: 24,
@@ -159,6 +237,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#7f8c8d',
     lineHeight: 20,
+  },
+  input: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    fontSize: 16,
   },
   imageContainer: {
     width: '100%',
@@ -212,7 +300,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   analyzeButton: {
-    backgroundColor: '#27ae60', // Medikal yeşil
+    backgroundColor: '#27ae60',
     width: '100%',
     padding: 18,
     borderRadius: 10,
@@ -244,7 +332,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     borderLeftWidth: 5,
-    borderLeftColor: '#f1c40f', // Uyarı sarısı
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -277,6 +364,5 @@ const styles = StyleSheet.create({
   resultRisk: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#e67e22',
   },
 });
