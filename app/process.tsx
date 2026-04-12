@@ -10,7 +10,7 @@ export default function ProcessScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<{ angle: number; risk: string; riskColor: string } | null>(null);
 
-  // Galeriden Fotoğraf Seçme
+  // Galeriden Fotoğraf Seçme (DÜZELTİLDİ)
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -20,8 +20,8 @@ export default function ProcessScreen() {
 
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
+      allowsEditing: false, // KESİNLİKLE FALSE OLMALI (Röntgen kırpılmamalı)
+      quality: 1,           // KESİNLİKLE 1 OLMALI (Maksimum medikal kalite)
     });
 
     if (!result.canceled) {
@@ -30,7 +30,7 @@ export default function ProcessScreen() {
     }
   };
 
-  // Kameradan Fotoğraf Çekme
+  // Kameradan Fotoğraf Çekme (DÜZELTİLDİ)
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -39,8 +39,8 @@ export default function ProcessScreen() {
     }
 
     let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      quality: 0.8,
+      allowsEditing: false, // KESİNLİKLE FALSE OLMALI
+      quality: 1,           // KESİNLİKLE 1 OLMALI
     });
 
     if (!result.canceled) {
