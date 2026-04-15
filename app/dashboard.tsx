@@ -66,15 +66,19 @@ export default function DashboardScreen() {
   };
 
   const handleViewResult = (item: any) => {
-    // Güvenli URL gönderimi
+    // Güvenli URL gönderimi ve Yeni Eklenen Resim Linkleri
     const safeImageUrl = item.filename ? encodeURIComponent(item.filename) : '';
+    const safeAnalyzedUrl = item.analyzed_url ? encodeURIComponent(item.analyzed_url) : '';
+    const safeSegmentedUrl = item.segmented_url ? encodeURIComponent(item.segmented_url) : '';
 
     router.push({
       pathname: '/detail',
       params: {
         patient_name: item.patient_name,
         upload_date: item.upload_date,
-        filename: safeImageUrl,
+        filename: safeImageUrl, // Ham görüntü
+        analyzed_url: safeAnalyzedUrl, // Çizgili görüntü
+        segmented_url: safeSegmentedUrl, // Maskeli görüntü
         cobb_angle: item.cobb_angle,
         diagnosis: item.diagnosis,
         diagnosis_color: item.diagnosis_color

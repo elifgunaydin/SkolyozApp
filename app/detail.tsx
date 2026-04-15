@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIn
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 
 const screenWidth = Dimensions.get('window').width;
-const IMAGE_BOX_WIDTH = screenWidth - 40; // Ekran genişliği eksi padding
+const IMAGE_BOX_WIDTH = screenWidth - 40; 
 
 export default function DetailScreen() {
   const params = useLocalSearchParams();
@@ -22,7 +22,6 @@ export default function DetailScreen() {
     }
   }, [params]);
 
-  // URL'leri güvenli şekilde decode etme fonksiyonu
   const getSafeUrl = (paramValue: any) => {
     let raw = Array.isArray(paramValue) ? paramValue[0] : paramValue;
     raw = String(raw || '');
@@ -34,9 +33,6 @@ export default function DetailScreen() {
     }
   };
 
-  // Mevcut Supabase veritabanınızda şimdilik sadece 1 fotoğraf kayıtlı ('filename')
-  // İleride veritabanına 'analyzed_url' ve 'segmented_url' eklediğinizde burası otomatik o resimleri çekecektir.
-  // API henüz bağlı değilse, uygulamanın boş kalmaması için üç sekmeye de aynı resmi koyar.
   const originalUrl = getSafeUrl(params.filename);
   const analyzedUrl = getSafeUrl(params.analyzed_url) || originalUrl; 
   const segmentedUrl = getSafeUrl(params.segmented_url) || originalUrl;
@@ -89,7 +85,7 @@ export default function DetailScreen() {
                   <Image
                     source={{ uri: img.uri }}
                     style={styles.previewImage}
-                    resizeMode="contain" // Kesinlikle contain! Açılar bozulmaz ve kesilmez.
+                    resizeMode="contain" 
                     onLoadEnd={() => setImageLoading(false)}
                   />
                   <Text style={styles.imageBadge}>{img.label}</Text>
@@ -106,19 +102,28 @@ export default function DetailScreen() {
       </View>
 
       {cobbAngle && cobbAngle !== 'undefined' ? (
-        <View style={[styles.resultCard, { borderLeftColor: diagnosisColor }]}>
-          <Text style={styles.resultTitle}>Ölçüm Sonucu</Text>
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Hesaplanan Cobb Açısı:</Text>
-            <Text style={styles.resultValue}>{cobbAngle}°</Text>
+        <>
+          <View style={[styles.resultCard, { borderLeftColor: diagnosisColor }]}>
+            <Text style={styles.resultTitle}>Ölçüm Sonucu</Text>
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>Hesaplanan Cobb Açısı:</Text>
+              <Text style={styles.resultValue}>{cobbAngle}°</Text>
+            </View>
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>Durum:</Text>
+              <Text style={[styles.resultRisk, { color: diagnosisColor }]}>
+                {diagnosis}
+              </Text>
+            </View>
           </View>
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Durum:</Text>
-            <Text style={[styles.resultRisk, { color: diagnosisColor }]}>
-              {diagnosis}
+
+          <View style={styles.warningBox}>
+            <Text style={styles.warningTitle}>Tıbbi Sorumluluk Reddi</Text>
+            <Text style={styles.warningText}>
+              Bu sistemin ölçüm sonuçlarında ±10 dereceye kadar yanılma payı bulunabilir ve kesin teşhis niteliği taşımaz. Kesin tanı ve tedavi planlaması için lütfen uzman bir hekime başvurunuz.
             </Text>
           </View>
-        </View>
+        </>
       ) : null}
 
       <TouchableOpacity 
@@ -145,19 +150,15 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 18, color: '#34495e', marginBottom: 5 },
   boldText: { fontWeight: 'bold', color: '#2c3e50' },
   dateText: { fontSize: 14, color: '#7f8c8d', marginTop: 5 },
-  
-  // YENİ EKLENEN CAROUSEL STİLLERİ
   carouselWrapper: { width: '100%', marginBottom: 20 },
   carouselScroll: { width: IMAGE_BOX_WIDTH, height: 400, backgroundColor: '#ecf0f1', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#bdc3c7' },
   slide: { width: IMAGE_BOX_WIDTH, height: 400, justifyContent: 'center', alignItems: 'center', position: 'relative' },
   previewImage: { width: '100%', height: '100%' },
   imageBadge: { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(44, 62, 80, 0.8)', color: 'white', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, fontSize: 12, fontWeight: 'bold', overflow: 'hidden' },
   swipeHint: { textAlign: 'center', color: '#7f8c8d', fontSize: 12, marginTop: 8, fontStyle: 'italic' },
-  
   loadingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(236, 240, 241, 0.7)', zIndex: 10 },
   placeholderBox: { alignItems: 'center', padding: 20 },
   placeholderText: { fontSize: 16, color: '#95a5a6' },
-  
   resultCard: { width: '100%', backgroundColor: 'white', padding: 20, borderRadius: 12, borderLeftWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 3, marginBottom: 20 },
   resultTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 10 },
   resultRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
@@ -165,5 +166,8 @@ const styles = StyleSheet.create({
   resultValue: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50' },
   resultRisk: { fontSize: 18, fontWeight: 'bold' },
   closeButton: { backgroundColor: '#bdc3c7', width: '100%', padding: 18, borderRadius: 10, alignItems: 'center', marginBottom: 30 },
-  closeButtonText: { color: '#2c3e50', fontSize: 16, fontWeight: 'bold' }
+  closeButtonText: { color: '#2c3e50', fontSize: 16, fontWeight: 'bold' },
+  warningBox: { backgroundColor: '#fff3cd', borderColor: '#ffeeba', borderWidth: 1, padding: 15, borderRadius: 8, marginBottom: 20, width: '100%' },
+  warningTitle: { color: '#856404', fontWeight: 'bold', fontSize: 14, marginBottom: 5 },
+  warningText: { color: '#856404', fontSize: 13, lineHeight: 18 }
 });
