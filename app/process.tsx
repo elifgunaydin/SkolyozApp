@@ -83,11 +83,7 @@ export default function ProcessScreen() {
         type: 'image/jpeg',
       } as any);
 
-<<<<<<< Updated upstream
       const apiResponse = await fetch('http://172.20.10.2:5000/api/analyze', {
-=======
-      const apiResponse = await fetch('http://192.168.1.161:5000/api/analyze', {
->>>>>>> Stashed changes
         method: 'POST',
         body: formData,
       });

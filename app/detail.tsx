@@ -42,15 +42,9 @@ export default function DetailScreen() {
   const segmentedUrl = getSafeUrl(params.segmented_url) || originalUrl;
 
   const imagesToDisplay = [
-<<<<<<< Updated upstream
     { id: 1, uri: analyzedUrl, label: "Cobb Açısı Analizi" },
     { id: 2, uri: segmentedUrl, label: "Omurga Segmentasyonu" },
     { id: 3, uri: originalUrl, label: "Orijinal Görüntü" }
-=======
-    { id: 1, uri: analyzedUrl, label: "Analizli Görüntü" },
-    { id: 2, uri: segmentedUrl, label: "Segmentasyon" },
-    { id: 3, uri: originalUrl, label: "Ham Görüntü" }
->>>>>>> Stashed changes
   ];
 
   const formatDate = (dateString: string) => {
@@ -108,11 +102,7 @@ export default function DetailScreen() {
             </View>
           ))}
         </ScrollView>
-<<<<<<< Updated upstream
         <Text style={styles.swipeHint}>Omurga segmentasyonu ve orijinal görüntü için yana kaydırınız.</Text>
-=======
-        <Text style={styles.swipeHint}>💡 Omurga segmentasyonu ve ham görüntü için yana kaydırın 👉</Text>
->>>>>>> Stashed changes
       </View>
 
       {cobbAngle && cobbAngle !== 'undefined' ? (
