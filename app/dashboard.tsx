@@ -1,58 +1,56 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, SafeAreaView, Platform, StatusBar, Dimensions } from 'react-native';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { supabase } from '../services/supabase';
+import { Ionicons } from '@expo/vector-icons';
+
+const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
-  const [userName, setUserName] = useState('');
-  const [userId, setUserId] = useState<string | null>(null); // UserId state'e alınır
-  const [loading, setLoading] = useState(true);
   const [analyses, setAnalyses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
 
- // 1. İlk girişte kullanıcı bilgilerini al
-  useEffect(() => {
-    async function getUserData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserName(user.user_metadata?.full_name || 'Kullanıcı');
-        setUserId(user.id);
-      } else {
-        setLoading(false);
-      }
+  const getUserData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUserName(user.user_metadata?.full_name || 'Kullanıcı');
+      setUserId(user.id);
+    } else {
+      setLoading(false);
     }
-    getUserData();
-  }, []);
+  };
 
-  // 2. ÇÖZÜM: Sayfa her odaklandığında (Focus) verileri tekrar çek
+  useFocusEffect(useCallback(() => { getUserData(); }, []));
+
   useFocusEffect(
     useCallback(() => {
-      if (userId) {
-        fetchAnalyses(userId);
-      }
+      if (userId) fetchAnalyses(userId);
     }, [userId])
   );
 
-  async function fetchAnalyses(userId: string) {
+  const fetchAnalyses = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('image')
         .select('*')
         .eq('user_id', userId)
-        .order('upload_date', { ascending: false }); 
+        .order('upload_date', { ascending: false });
 
-      if (error) console.error("Supabase Çekme Hatası:", error);
+      if (error) console.error("Veri Çekme Hatası:", error);
       else if (data) setAnalyses(data);
     } catch (error) {
-      console.error('Veri çekme hatası:', error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  async function handleLogout() {
+  const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.replace('/'); 
-  }
+    router.replace('/');
+  };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'Tarih Yok';
@@ -60,21 +58,17 @@ export default function DashboardScreen() {
     date.setHours(date.getHours() + 3);
     const day = String(date.getDate()).padStart(2, '0');
     const monthNames = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
-    const month = monthNames[date.getMonth()];
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
+    return `${day} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
   };
 
   const handleViewResult = (item: any) => {
-    // Güvenli URL gönderimi
-    const safeImageUrl = item.filename ? encodeURIComponent(item.filename) : '';
-
     router.push({
       pathname: '/detail',
       params: {
         patient_name: item.patient_name,
-        upload_date: item.upload_date,
-        filename: safeImageUrl,
+        filename: item.filename ? encodeURIComponent(item.filename) : '',
+        analyzed_url: item.analyzed_url ? encodeURIComponent(item.analyzed_url) : '',
+        segmented_url: item.segmented_url ? encodeURIComponent(item.segmented_url) : '',
         cobb_angle: item.cobb_angle,
         diagnosis: item.diagnosis,
         diagnosis_color: item.diagnosis_color
@@ -85,124 +79,157 @@ export default function DashboardScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3498db" />
+        <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
   }
 
-  return (
-    <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          title: 'Ana Sayfa',
-          headerLeft: () => null,
-          headerRight: () => (
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-              <Text style={styles.logoutText}>Çıkış</Text>
-            </TouchableOpacity>
-          )
-        }} 
-      />
-
-      <View style={styles.headerBox}>
-        <Text style={styles.welcomeText}>Hoş Geldiniz,</Text>
-        <Text style={styles.nameText}>{userName}</Text>
+  // --- SAYFA ÜST KISMI (BİNDİRMELİ TASARIM) ---
+  const renderHeader = () => (
+    <View style={styles.headerWrapper}>
+      {/* Kavisli Arka Plan */}
+      <View style={styles.headerBackground}>
+        <View style={styles.headerTopRow}>
+          <View>
+            <Text style={styles.headerGreeting}>İyi Günler,</Text>
+            <Text style={styles.headerName}>Dr. {userName.split(' ')[0]}</Text>
+          </View>
+          <TouchableOpacity onPress={handleLogout} style={styles.avatarContainer}>
+            <Ionicons name="person" size={20} color="#2563eb" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <TouchableOpacity style={styles.newAnalysisButton} onPress={() => router.push('/process')} >
-        <Text style={styles.newAnalysisButtonText}>+ Yeni Röntgen Analizi Yap</Text>
-      </TouchableOpacity>
+      {/* Üzerine Binen (Floating) Aksiyon Kartı */}
+      <View style={styles.floatingCard}>
+        <Text style={styles.floatingCardTitle}>Yeni Analiz Başlat</Text>
+        <Text style={styles.floatingCardDesc}>Omurga röntgeni yükleyin ve Cobb açısını anında ölçün.</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/process')} activeOpacity={0.8}>
+          <Ionicons name="scan-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+          <Text style={styles.primaryButtonText}>Röntgen Yükle</Text>
+        </TouchableOpacity>
+      </View>
 
-      <View style={styles.historyContainer}>
-        <Text style={styles.historyTitle}>Geçmiş Analizleriniz</Text>
-        
-        {analyses.length > 0 ? (
-          <FlatList
-            data={analyses}
-            keyExtractor={(item) => item.id.toString()}
-            showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <View style={[styles.historyCard, item.diagnosis_color ? { borderLeftColor: item.diagnosis_color } : null]}>
-                
-                <View style={styles.historyInfo}>
-                  <Text style={styles.historyPatientName}>{item.patient_name}</Text>
-                  <Text style={styles.historyDate}>{formatDate(item.upload_date)}</Text>
-                </View>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Son Analizler</Text>
+        <TouchableOpacity>
+          <Text style={styles.seeAllText}>Tümü ({analyses.length})</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
-                <TouchableOpacity 
-                  style={styles.viewResultButton}
-                  onPress={() => handleViewResult(item)}
-                >
-                  <Text style={styles.viewResultButtonText}>Sonucu Gör</Text>
-                </TouchableOpacity>
+  return (
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563eb" />
+      <Stack.Screen options={{ headerShown: false }} />
 
+      <FlatList
+        data={analyses}
+        keyExtractor={(item) => item.id.toString()}
+        ListHeaderComponent={renderHeader}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => {
+          // Renge göre dinamik zemin rengi ayarlama (Creative Tim tarzı)
+          const baseColor = item.diagnosis_color || '#94a3b8';
+          const lightBgColor = baseColor + '15'; // Hex sonuna saydamlık ekleme
+          
+          return (
+            <TouchableOpacity style={styles.historyCard} onPress={() => handleViewResult(item)} activeOpacity={0.7}>
+              {/* Sol İkon Alanı */}
+              <View style={[styles.iconBox, { backgroundColor: lightBgColor }]}>
+                <Ionicons name="body-outline" size={24} color={baseColor} />
               </View>
-            )}
-          />
-        ) : (
+
+              {/* Orta Metin Alanı */}
+              <View style={styles.cardInfo}>
+                <Text style={styles.patientName} numberOfLines={1}>{item.patient_name}</Text>
+                <Text style={styles.dateText}>{formatDate(item.upload_date)}</Text>
+              </View>
+
+              {/* Sağ Sonuç Alanı */}
+              <View style={styles.cardResult}>
+                <Text style={[styles.angleText, { color: baseColor }]}>{item.cobb_angle}°</Text>
+                <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
+              </View>
+            </TouchableOpacity>
+          );
+        }}
+        ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>Henüz bir analiz bulunmuyor.</Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="folder-open-outline" size={40} color="#94a3b8" />
+            </View>
+            <Text style={styles.emptyStateTitle}>Kayıt Bulunamadı</Text>
+            <Text style={styles.emptyStateDesc}>Sisteme yüklediğiniz bir analiz henüz bulunmuyor.</Text>
           </View>
-        )}
+        }
+      />
+
+      {/* Alt Gezinme Çubuğu (Bottom Navigation - Görsel Amaçlı) */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItem}>
+          <Ionicons name="home" size={24} color="#2563eb" />
+          <Text style={[styles.navText, { color: '#2563eb' }]}>Ana Sayfa</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push('/process')}>
+          <View style={styles.fabButton}>
+            <Ionicons name="add" size={32} color="#ffffff" />
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={handleLogout}>
+          <Ionicons name="settings-outline" size={24} color="#94a3b8" />
+          <Text style={styles.navText}>Ayarlar</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f7f6', padding: 20 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f7f6' },
-  logoutButton: { padding: 5 },
-  logoutText: { color: '#e74c3c', fontWeight: 'bold', fontSize: 16 },
-  headerBox: { marginTop: 10, marginBottom: 30 },
-  welcomeText: { fontSize: 18, color: '#7f8c8d' },
-  nameText: { fontSize: 26, fontWeight: 'bold', color: '#2c3e50', marginTop: 5 },
-  newAnalysisButton: { backgroundColor: '#27ae60', padding: 20, borderRadius: 12, alignItems: 'center', shadowColor: '#27ae60', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5, marginBottom: 20 },
-  newAnalysisButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  historyContainer: { flex: 1 },
-  historyTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50', marginBottom: 15 },
-  emptyState: { backgroundColor: 'white', padding: 30, borderRadius: 10, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#bdc3c7' },
-  emptyStateText: { color: '#95a5a6', fontSize: 15 },
+  mainContainer: { flex: 1, backgroundColor: '#f8fafc' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
+  listContent: { paddingBottom: 100 }, // Alt bar için boşluk
   
-  historyCard: { 
-    flexDirection: 'row', 
-    backgroundColor: 'white', 
-    padding: 15, 
-    borderRadius: 10, 
-    marginBottom: 10, 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 1 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 3, 
-    elevation: 2,
-    borderLeftWidth: 5,
-    borderLeftColor: '#bdc3c7', 
-  },
-  historyInfo: { 
-    flex: 1, 
-    marginRight: 10 
-  },
-  historyPatientName: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: '#2c3e50', 
-    marginBottom: 4 
-  },
-  historyDate: { 
-    fontSize: 13, 
-    color: '#7f8c8d' 
-  },
-  viewResultButton: {
-    backgroundColor: '#3498db', 
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-  },
-  viewResultButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
+  // --- KAVİSLİ ÜST BÖLÜM ---
+  headerWrapper: { marginBottom: 10 },
+  headerBackground: { backgroundColor: '#2563eb', height: 220, borderBottomLeftRadius: 40, borderBottomRightRadius: 40, paddingHorizontal: 24, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 20 : 60 },
+  headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerGreeting: { color: '#bfdbfe', fontSize: 16, fontWeight: '500', marginBottom: 4 },
+  headerName: { color: '#ffffff', fontSize: 26, fontWeight: '800', letterSpacing: 0.5 },
+  avatarContainer: { width: 44, height: 44, backgroundColor: '#ffffff', borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
+
+  // --- ÜZERİNE BİNEN KART (Floating Card) ---
+  floatingCard: { backgroundColor: '#ffffff', marginHorizontal: 24, marginTop: -60, borderRadius: 24, padding: 24, shadowColor: '#64748b', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 8 },
+  floatingCardTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  floatingCardDesc: { fontSize: 14, color: '#64748b', lineHeight: 20, marginBottom: 20 },
+  primaryButton: { backgroundColor: '#2563eb', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 14, borderRadius: 16 },
+  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+
+  // --- LİSTE BAŞLIĞI ---
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 24, marginTop: 32, marginBottom: 16 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1e293b' },
+  seeAllText: { fontSize: 14, fontWeight: '600', color: '#2563eb' },
+
+  // --- LİSTE ELEMANLARI (Creative Tim Tarzı Kartlar) ---
+  historyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', marginHorizontal: 24, marginBottom: 16, padding: 16, borderRadius: 20, shadowColor: '#94a3b8', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  iconBox: { width: 50, height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  cardInfo: { flex: 1, justifyContent: 'center' },
+  patientName: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
+  dateText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+  cardResult: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  angleText: { fontSize: 18, fontWeight: '800' },
+
+  // --- BOŞ DURUM ---
+  emptyState: { alignItems: 'center', marginTop: 40, paddingHorizontal: 40 },
+  emptyIconCircle: { width: 80, height: 80, backgroundColor: '#f1f5f9', borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  emptyStateTitle: { fontSize: 18, fontWeight: '700', color: '#475569', marginBottom: 8 },
+  emptyStateDesc: { fontSize: 14, color: '#94a3b8', textAlign: 'center', lineHeight: 22 },
+
+  // --- ALT GEZİNME ÇUBUĞU (Bottom Navigation) ---
+  bottomNav: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#ffffff', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 10 },
+  navItem: { alignItems: 'center', justifyContent: 'center', flex: 1 },
+  navText: { fontSize: 12, fontWeight: '600', color: '#94a3b8', marginTop: 4 },
+  fabButton: { width: 60, height: 60, backgroundColor: '#2563eb', borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginTop: -30, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }
 });

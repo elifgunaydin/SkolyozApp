@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
+
+const screenWidth = Dimensions.get('window').width;
+const IMAGE_BOX_WIDTH = screenWidth - 40; 
 
 export default function DetailScreen() {
   const params = useLocalSearchParams();
@@ -12,42 +15,88 @@ export default function DetailScreen() {
   const diagnosisColor = String(params.diagnosis_color || '#e67e22');
 
   const [imageLoading, setImageLoading] = useState(true);
-  const [imageError, setImageError] = useState(false);
 
-  // GÜVENLİK KALKANI: Eğer sayfaya yanlışlıkla (giriş yaparken vb.) verisiz gelinirse,
-  // kullanıcıyı anında güvenli bir şekilde Ana Sayfaya (Dashboard) postala!
   useEffect(() => {
     if (!params.patient_name && !params.filename) {
-      // Geçmiş yoksa router.back() ÇÖKER. Bu yüzden zorla ana sayfaya yönlendiriyoruz.
-      router.replace('/dashboard'); // Ana sayfanızın adı '/' ise burayı '/' yapın
+      router.replace('/dashboard'); 
     }
   }, [params]);
 
-  let rawFilename = params.filename;
-  if (Array.isArray(rawFilename)) rawFilename = rawFilename[0];
-  rawFilename = String(rawFilename || '');
+  const getSafeUrl = (paramValue: any) => {
+    let raw = Array.isArray(paramValue) ? paramValue[0] : paramValue;
+    raw = String(raw || '');
+    if (!raw || raw === 'undefined') return '';
+    try { return decodeURIComponent(raw).trim(); } catch (e) { return raw.trim(); }
+  };
 
-  let imageUrl = '';
-  if (rawFilename && rawFilename !== 'undefined') {
-    try {
-      // .trim() komutu sağdaki/soldaki görünmez boşlukları jilet gibi kesip atar!
-      imageUrl = decodeURIComponent(rawFilename).trim(); 
-    } catch (e) {
-      imageUrl = rawFilename.trim();
+  // GÜNCELLENMİŞ: 5 KATEGORİLİ TAVSİYE FONKSİYONU
+  const getRecommendationData = (angleValueStr: string) => {
+    const angleValue = parseFloat(angleValueStr);
+    if (isNaN(angleValue)) return null;
+
+    if (angleValue < 10) {
+      return {
+        title: "Normal (< 10°)",
+        desc: "Bu grup klinik olarak skolyoz tanısı almaz, ancak omurga sağlığını korumak önemlidir.",
+        home: "Core (merkez bölge) kaslarını güçlendiren genel egzersizler, yoga ve düzenli yürüyüş.",
+        doctor: "Herhangi bir tıbbi müdahale gerekmez, yıllık rutin duruş kontrolleri yeterlidir.",
+        general: "Masa başında uzun süre vakit geçiriyorsanız ergonomik koltuk ve dik duruş alışkanlığı edinmelisiniz.",
+        imagePath: null 
+      };
+    } else if (angleValue >= 10 && angleValue < 25) {
+      return {
+        title: "Hafif (10° – 25°)",
+        desc: "Eğriliğin başlangıç aşamasıdır, temel amaç ilerlemeyi durdurmaktır.",
+        home: "Sırtüstü yüzme, pilates ve uzman tarafından verilmiş simetrik esneme hareketleri.",
+        doctor: "6 ayda bir fiziksel muayene ve radyolojik takip. Skolyoz odaklı fizyoterapi seanslarına başlangıç.",
+        general: "Ağır çantaları tek omuzda taşımaktan kaçınmalı ve vücut asimetrisini fark etmeye odaklanmalısınız.",
+        imagePath: require('../assets/images/hafif.jpeg')
+      };
+    } else if (angleValue >= 25 && angleValue < 40) {
+      return {
+        title: "Orta (25° – 40°)",
+        desc: "Orta düzeyde eğrilik saptandı.",
+        home: "Schroth yöntemi gibi spesifik asimetrik fizyoterapi hareketleri.",
+        doctor: "Vakit kaybetmeden bir ortopedi uzmanına başvurmanız önerilir. Gerekli görülürse korse tedavisi planlanabilir.",
+        general: "Fiziksel aktivitelerde uzman hekimin kısıtlamalarına harfiyen uyulmalıdır.",
+        imagePath: require('../assets/images/orta.jpeg')
+      };
+    } else if (angleValue >= 40 && angleValue < 80) { 
+      return {
+        title: "Şiddetli (40° – 80°)",
+        desc: "Şiddetli düzeyde eğrilik saptandı.",
+        home: "Evde kendi başınıza bilinçsiz egzersiz yapmaktan kaçının.",
+        doctor: "Cerrahi müdahale seçeneklerinin değerlendirilmesi için derhal bir omurga cerrahisi uzmanına başvurmanız kesinlikle tavsiye edilir.",
+        general: "Sırt ve bel bölgesini zorlayacak her türlü ağır hareketten kaçınılmalıdır.",
+        imagePath: require('../assets/images/siddetli.jpeg')
+      };
+    } else {
+      return {
+        title: "Çok Şiddetli (≥ 80°)",
+        desc: "Yaşam kalitesini ciddi oranda etkileyebilecek, iç organ baskısının arttığı aşamadır.",
+        home: "Sadece doktorun izin verdiği çok hafif esneme hareketleri ve derin nefes egzersizleri.",
+        doctor: "Genellikle acil cerrahi müdahale ve multidisipliner (kardiyoloji, göğüs hastalıkları ve ortopedi) bir yaklaşım gerektirir.",
+        general: "En kısa sürede uzman bir omurga merkezine başvurulmalı ve cerrahi sonrası rehabilitasyon süreci planlanmalıdır.",
+        imagePath: null
+      };
     }
-  }
+  };
+
+  const originalUrl = getSafeUrl(params.filename);
+  const analyzedUrl = getSafeUrl(params.analyzed_url) || originalUrl; 
+  const segmentedUrl = getSafeUrl(params.segmented_url) || originalUrl;
+
+  const imagesToDisplay = [
+    { id: 1, uri: analyzedUrl, label: "Cobb Açısı Analizi" },
+    { id: 2, uri: segmentedUrl, label: "Omurga Segmentasyonu" },
+    { id: 3, uri: originalUrl, label: "Orijinal Görüntü" }
+  ];
 
   const formatDate = (dateString: string) => {
     if (!dateString || dateString === 'undefined') return 'Tarih Yok';
     const date = new Date(dateString);
     date.setHours(date.getHours() + 3);
-    const day = String(date.getDate()).padStart(2, '0');
-    const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-    const month = monthNames[date.getMonth()];
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day} ${month} ${year}  Saat: ${hours}:${minutes}`;
+    return `${String(date.getDate()).padStart(2, '0')} ${["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][date.getMonth()]} ${date.getFullYear()}  Saat: ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   };
 
   return (
@@ -60,74 +109,65 @@ export default function DetailScreen() {
         <Text style={styles.dateText}>{formatDate(uploadDate)}</Text>
       </View>
 
-      <View style={styles.imageContainer}>
-        {imageUrl ? (
-          <>
-            {imageLoading && !imageError && (
-              <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color="#3498db" />
-                <Text style={styles.loadingText}>Röntgen Yükleniyor...</Text>
-              </View>
-            )}
-
-            {imageError ? (
-              <View style={styles.placeholderBox}>
-                <Text style={styles.errorText}>Resim yüklenemedi!</Text>
-                <Text style={styles.debugText}>Sunucudan Gelen Link:</Text>
-                <Text style={styles.debugLinkText}>{imageUrl}</Text>
-              </View>
-            ) : (
-              <Image
-                source={{ uri: imageUrl }}
-                style={styles.previewImage}
-                resizeMode="contain"
-                onLoadStart={() => setImageLoading(true)}
-                onLoadEnd={() => setImageLoading(false)}
-                onError={() => {
-                  setImageError(true);
-                  setImageLoading(false);
-                }}
-              />
-            )}
-          </>
-        ) : (
-          <View style={styles.placeholderBox}>
-            <Text style={styles.placeholderText}>Görüntü Bekleniyor...</Text>
-          </View>
-        )}
+      <View style={styles.carouselWrapper}>
+        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carouselScroll}>
+          {imagesToDisplay.map((img) => (
+            <View key={img.id} style={styles.slide}>
+              {img.uri ? (
+                <>
+                  {imageLoading && <View style={styles.loadingOverlay}><ActivityIndicator size="large" color="#3498db" /></View>}
+                  <Image source={{ uri: img.uri }} style={styles.previewImage} resizeMode="contain" onLoadEnd={() => setImageLoading(false)} />
+                  <Text style={styles.imageBadge}>{img.label}</Text>
+                </>
+              ) : (
+                <View style={styles.placeholderBox}><Text style={styles.placeholderText}>Görüntü Bulunamadı</Text></View>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+        <Text style={styles.swipeHint}>Omurga segmentasyonu ve orijinal görüntü için yana kaydırınız.</Text>
       </View>
 
-      {cobbAngle && cobbAngle !== 'undefined' ? (
-        <View style={[styles.resultCard, { borderLeftColor: diagnosisColor }]}>
-          <Text style={styles.resultTitle}>Ölçüm Sonucu</Text>
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Hesaplanan Cobb Açısı:</Text>
-            <Text style={styles.resultValue}>{cobbAngle}°</Text>
+      {cobbAngle && cobbAngle !== 'undefined' && (
+        <>
+          <View style={[styles.resultCard, { borderLeftColor: diagnosisColor }]}>
+            <Text style={styles.resultTitle}>Ölçüm Sonucu</Text>
+            <View style={styles.resultRow}><Text style={styles.resultLabel}>Hesaplanan Cobb Açısı:</Text><Text style={styles.resultValue}>{cobbAngle}°</Text></View>
+            <View style={styles.resultRow}><Text style={styles.resultLabel}>Durum:</Text><Text style={[styles.resultRisk, { color: diagnosisColor }]}>{diagnosis}</Text></View>
           </View>
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Durum:</Text>
-            <Text style={[styles.resultRisk, { color: diagnosisColor }]}>
-              {diagnosis}
-            </Text>
-          </View>
-        </View>
-      ) : null}
 
-      {/* GÜNCELLENEN AKILLI GERİ DÖN BUTONU */}
-      <TouchableOpacity 
-        style={styles.closeButton} 
-        onPress={() => {
-          try {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/dashboard'); // Çökmek yerine Ana Sayfaya git
-            }
-          } catch (error) {
-            router.replace('/dashboard');
-          }
-        }}
-      >
+          {/* GÜNCELLENMİŞ DİNAMİK TAVSİYE KARTI */}
+          {getRecommendationData(cobbAngle) && (
+            <View style={styles.recCard}>
+              <Text style={styles.recMainTitle}>{getRecommendationData(cobbAngle)?.title}</Text>
+              <Text style={styles.recDesc}>{getRecommendationData(cobbAngle)?.desc}</Text>
+
+              <Text style={styles.recSubTitle}>Evde Yapılabilecekler:</Text>
+              <Text style={styles.recText}>{getRecommendationData(cobbAngle)?.home}</Text>
+
+              <Text style={styles.recSubTitle}>Doktor ile Yapılacaklar:</Text>
+              <Text style={styles.recText}>{getRecommendationData(cobbAngle)?.doctor}</Text>
+
+              <Text style={styles.recSubTitle}>Genel Tavsiye:</Text>
+              <Text style={styles.recText}>{getRecommendationData(cobbAngle)?.general}</Text>
+
+              {/* Eğer Kategoriye Özel Fotoğraf Varsa Göster */}
+              {getRecommendationData(cobbAngle)?.imagePath && (
+                <Image source={getRecommendationData(cobbAngle)?.imagePath} style={styles.recImage} resizeMode="contain" />
+              )}
+
+              {/* YENİ EKLENEN SABİT TAVSİYE UYARISI */}
+              <View style={styles.recWarningBox}>
+                <Text style={styles.recWarningText}>
+                  Bu değerlendirme yalnızca bilgilendirme amaçlıdır. Hesaplanan Cobb açısı ön analiz niteliğindedir. Kesin tanı ve tedavi planı için lütfen bir ortopedi uzmanına başvurunuz.
+                </Text>
+              </View>
+            </View>
+          )}
+        </>
+      )}
+
+      <TouchableOpacity style={styles.closeButton} onPress={() => { try { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); } catch (error) { router.replace('/dashboard'); } }}>
         <Text style={styles.closeButtonText}>Geri Dön</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -141,21 +181,33 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 18, color: '#34495e', marginBottom: 5 },
   boldText: { fontWeight: 'bold', color: '#2c3e50' },
   dateText: { fontSize: 14, color: '#7f8c8d', marginTop: 5 },
-  imageContainer: { width: '100%', height: 400, backgroundColor: '#ecf0f1', borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#bdc3c7', marginBottom: 20, position: 'relative' },
+  carouselWrapper: { width: '100%', marginBottom: 20 },
+  carouselScroll: { width: IMAGE_BOX_WIDTH, height: 400, backgroundColor: '#ecf0f1', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#bdc3c7' },
+  slide: { width: IMAGE_BOX_WIDTH, height: 400, justifyContent: 'center', alignItems: 'center', position: 'relative' },
   previewImage: { width: '100%', height: '100%' },
+  imageBadge: { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(44, 62, 80, 0.8)', color: 'white', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, fontSize: 12, fontWeight: 'bold', overflow: 'hidden' },
+  swipeHint: { textAlign: 'center', color: '#7f8c8d', fontSize: 12, marginTop: 8, fontStyle: 'italic' },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(236, 240, 241, 0.7)', zIndex: 10 },
-  loadingText: { marginTop: 10, color: '#2c3e50', fontWeight: 'bold', fontSize: 16 },
   placeholderBox: { alignItems: 'center', padding: 20 },
   placeholderText: { fontSize: 16, color: '#95a5a6' },
-  errorText: { fontSize: 18, color: '#e74c3c', fontWeight: 'bold', marginBottom: 10 },
-  debugText: { fontSize: 12, color: '#7f8c8d', textAlign: 'center', marginTop: 5 },
-  debugLinkText: { fontSize: 10, color: '#3498db', textAlign: 'center', marginTop: 5 },
-  resultCard: { width: '100%', backgroundColor: 'white', padding: 20, borderRadius: 12, borderLeftWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 3, marginBottom: 20 },
+  resultCard: { width: '100%', backgroundColor: 'white', padding: 20, borderRadius: 12, borderLeftWidth: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 3, marginBottom: 15 },
   resultTitle: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 10 },
   resultRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   resultLabel: { fontSize: 16, color: '#7f8c8d' },
   resultValue: { fontSize: 18, fontWeight: 'bold', color: '#2c3e50' },
   resultRisk: { fontSize: 18, fontWeight: 'bold' },
   closeButton: { backgroundColor: '#bdc3c7', width: '100%', padding: 18, borderRadius: 10, alignItems: 'center', marginBottom: 30 },
-  closeButtonText: { color: '#2c3e50', fontSize: 16, fontWeight: 'bold' }
+  closeButtonText: { color: '#2c3e50', fontSize: 16, fontWeight: 'bold' },
+  
+  // YENİ TAVSİYE KARTI STİLLERİ
+  recCard: { backgroundColor: '#f0f8ff', borderColor: '#cce7ff', borderWidth: 1, padding: 15, borderRadius: 12, marginBottom: 20, width: '100%' },
+  recMainTitle: { fontSize: 18, fontWeight: 'bold', color: '#0056b3', marginBottom: 5 },
+  recDesc: { fontSize: 14, color: '#333', marginBottom: 15, fontStyle: 'italic' },
+  recSubTitle: { fontSize: 15, fontWeight: 'bold', color: '#004085', marginTop: 10, marginBottom: 3 },
+  recText: { fontSize: 14, color: '#444', lineHeight: 20 },
+  recImage: { width: '100%', height: 200, borderRadius: 8, marginTop: 15, backgroundColor: 'white' },
+  
+  // YENİ TAVSİYE UYARISI STİLLERİ
+  recWarningBox: { marginTop: 15, padding: 10, backgroundColor: '#ffeeba', borderRadius: 8, borderWidth: 1, borderColor: '#ffdf7e' },
+  recWarningText: { fontSize: 12, color: '#856404', fontStyle: 'italic', textAlign: 'center', fontWeight: '500' }
 });
