@@ -32,17 +32,17 @@ export default function ProcessScreen() {
         title: "Normal (< 10°)",
         desc: "Bu grup klinik olarak skolyoz tanısı almaz, ancak omurga sağlığını korumak önemlidir.",
         home: "Core (merkez bölge) kaslarını güçlendiren genel egzersizler, yoga ve düzenli yürüyüş.",
-        doctor: "Herhangi bir tıbbi müdahale gerekmez; yıllık rutin duruş kontrolleri yeterlidir.",
-        general: "Masa başında uzun süre vakit geçiriyorsan (yazılım projelerinde olduğu gibi) ergonomik koltuk ve dik duruş alışkanlığı edinmelisin.",
+        doctor: "Herhangi bir tıbbi müdahale gerekmez, yıllık rutin duruş kontrolleri yeterlidir.",
+        general: "Masa başında uzun süre vakit geçiriyorsanız ergonomik koltuk ve dik duruş alışkanlığı edinmelisiniz.",
         imagePath: null // Normal olanda fotoğraf yok
       };
     } else if (angleValue >= 10 && angleValue < 25) {
       return {
         title: "Hafif (10° – 25°)",
-        desc: "Eğriliğin başlangıç aşamasıdır; temel amaç ilerlemeyi durdurmaktır.",
+        desc: "Eğriliğin başlangıç aşamasıdır, temel amaç ilerlemeyi durdurmaktır.",
         home: "Sırtüstü yüzme, pilates ve uzman tarafından verilmiş simetrik esneme hareketleri.",
         doctor: "6 ayda bir fiziksel muayene ve radyolojik takip. Skolyoz odaklı fizyoterapi seanslarına başlangıç.",
-        general: "Ağır çantaları tek omuzda taşımaktan kaçınmalı ve vücut asimetrisini fark etmeye odaklanmalısın.",
+        general: "Ağır çantaları tek omuzda taşımaktan kaçınmalı ve vücut asimetrisini fark etmeye odaklanmalısınız.",
         imagePath: require('../assets/images/hafif.jpeg')
       };
     } else if (angleValue >= 25 && angleValue < 40) {
@@ -50,7 +50,7 @@ export default function ProcessScreen() {
         title: "Orta (25° – 40°)",
         desc: "Orta düzeyde eğrilik saptandı.",
         home: "Schroth yöntemi gibi spesifik asimetrik fizyoterapi hareketleri.",
-        doctor: "VAKİT KAYBETMEDEN bir Ortopedi uzmanına başvurmanız önerilir. Gerekli görülürse korse tedavisi planlanabilir.",
+        doctor: "Vakit kaybetmeden bir ortopedi uzmanına başvurmanız önerilir. Gerekli görülürse korse tedavisi planlanabilir.",
         general: "Fiziksel aktivitelerde uzman hekimin kısıtlamalarına harfiyen uyulmalıdır.",
         imagePath: require('../assets/images/orta.jpeg')
       };
@@ -59,7 +59,7 @@ export default function ProcessScreen() {
         title: "Şiddetli (40° – 80°)",
         desc: "Şiddetli düzeyde eğrilik saptandı.",
         home: "Evde kendi başınıza bilinçsiz egzersiz yapmaktan kaçının.",
-        doctor: "Cerrahi müdahale seçeneklerinin değerlendirilmesi için DERHAL bir Omurga Cerrahisi uzmanına başvurmanız KESİNLİKLE tavsiye edilir.",
+        doctor: "Cerrahi müdahale seçeneklerinin değerlendirilmesi için derhal bir omurga cerrahisi uzmanına başvurmanız KESİNLİKLE tavsiye edilir.",
         general: "Sırt ve bel bölgesini zorlayacak her türlü ağır hareketten kaçınılmalıdır.",
         imagePath: require('../assets/images/siddetli.jpeg')
       };
@@ -142,7 +142,7 @@ export default function ProcessScreen() {
       
       const formData = new FormData();
       formData.append('file', { uri: finalUri, name: uploadFileName, type: mimeType } as any);
-      const apiResponse = await fetch('http://172.20.10.2:5000/api/analyze', { method: 'POST', body: formData });
+      const apiResponse = await fetch('http://192.168.1.161:5000/api/analyze', { method: 'POST', body: formData });
       const aiData = await apiResponse.json();
 
       if (!aiData.success) throw new Error(aiData.error || 'Yapay zeka analizinde hata oluştu.');
