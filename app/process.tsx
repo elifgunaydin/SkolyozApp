@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView, Alert, TextInput, Dimensions } from 'react-native';
-import { Stack } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { supabase } from '../services/supabase'; 
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
+import { Stack } from 'expo-router';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Dimensions, Image, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../services/supabase';
 
 const screenWidth = Dimensions.get('window').width;
 const IMAGE_BOX_WIDTH = screenWidth - 40;
@@ -34,7 +34,7 @@ export default function ProcessScreen() {
         home: "Core (merkez bölge) kaslarını güçlendiren genel egzersizler, yoga ve düzenli yürüyüş.",
         doctor: "Herhangi bir tıbbi müdahale gerekmez, yıllık rutin duruş kontrolleri yeterlidir.",
         general: "Masa başında uzun süre vakit geçiriyorsanız ergonomik koltuk ve dik duruş alışkanlığı edinmelisiniz.",
-        imagePath: null // Normal olanda fotoğraf yok
+        imagePath: null 
       };
     } else if (angleValue >= 10 && angleValue < 25) {
       return {
@@ -54,7 +54,7 @@ export default function ProcessScreen() {
         general: "Fiziksel aktivitelerde uzman hekimin kısıtlamalarına harfiyen uyulmalıdır.",
         imagePath: require('../assets/images/orta.jpeg')
       };
-    } else if (angleValue >= 40 && angleValue < 80) { // Şiddetli aralığı 40-80 olarak sınırlandırıldı
+    } else if (angleValue >= 40 && angleValue < 80) { 
       return {
         title: "Şiddetli (40° – 80°)",
         desc: "Şiddetli düzeyde eğrilik saptandı.",
@@ -70,13 +70,11 @@ export default function ProcessScreen() {
         home: "Sadece doktorun izin verdiği çok hafif esneme hareketleri ve derin nefes egzersizleri.",
         doctor: "Genellikle acil cerrahi müdahale ve multidisipliner (kardiyoloji, göğüs hastalıkları ve ortopedi) bir yaklaşım gerektirir.",
         general: "En kısa sürede uzman bir omurga merkezine başvurulmalı ve cerrahi sonrası rehabilitasyon süreci planlanmalıdır.",
-        imagePath: null // Çok şiddetli durumda da özel bir fotoğraf yoktur.
+        imagePath: null 
       };
     }
   };
 
-  // Kullanıcının cihaz galerisine erişim izni isteyerek, kayıtlı fotoğraflar arasından
-  //mevcut bir röntgen görüntüsünün seçilmesini ve sisteme aktarılmasını sağlar.
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -87,8 +85,6 @@ export default function ProcessScreen() {
     if (!res.canceled) { setImage(res.assets[0].uri); setResult(null); }
   };
 
-  // Kullanıcının cihaz kamerasına erişim izni isteyerek, anlık olarak yeni bir röntgen fotoğrafı çekilmesini ve 
-  //uygulamanın analiz arabelleğine alınmasını sağlar.
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -107,19 +103,27 @@ export default function ProcessScreen() {
     } catch (err) { Alert.alert('Hata', 'Dosya seçilirken bir sorun oluştu.'); }
   };
 
-  // Cihazın yerel dosya sistemini açarak, E-Nabız veya HBYS gibi sistemlerden indirilmiş PDF, BIN veya standart görüntü
-  //uzantılı medikal dosyaların seçilerek uygulamaya yüklenmesini sağlar.
   const getArrayBufferFromUri = async (uri: string): Promise<ArrayBuffer> => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.onload = function () { resolve(xhr.response as ArrayBuffer); };
-      xhr.onerror = function () { reject(new Error("Dosya okunamadı.")); };
-      xhr.responseType = "arraybuffer"; xhr.open("GET", uri, true); xhr.send(null);
-    });
+    try {
+      let safeUri = uri;
+      if (!safeUri.startsWith('file://') && !safeUri.startsWith('content://')) {
+        safeUri = `file://${safeUri}`;
+      }
+
+      const response = await fetch(safeUri);
+      const blob = await response.blob();
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(new Error("Supabase yüklemesi için dosya dönüştürülemedi."));
+        reader.readAsArrayBuffer(blob);
+      });
+    } catch (error: any) {
+      throw new Error("Yerel dosya okunamadı: " + error.message);
+    }
   };
 
-  // Mobil istemci, yapay zekâ sunucusu ve bulut veritabanı (Supabase) arasındaki uçtan uca veri iletişimini, hata ayıklama (error handling) ve
-  //durum yönetimini (state management) sağlayan ana analiz algoritması.
   const handleAnalyze = async () => {
     if (!image) { Alert.alert('Eksik İşlem', 'Lütfen önce bir röntgen görüntüsü veya dosyası seçin.'); return; }
     if (!patientName.trim()) { Alert.alert('Eksik Bilgi', 'Lütfen hasta adını giriniz.'); return; }
@@ -140,9 +144,26 @@ export default function ProcessScreen() {
         uploadFileName = `document.${ext}`;
       }
       
+      let fileUri = finalUri;
+      if (Platform.OS === 'ios') {
+        fileUri = finalUri.replace('file://', '');
+      } else if (Platform.OS === 'android') {
+        if (!fileUri.startsWith('file://')) {
+          fileUri = `file://${finalUri}`;
+        }
+      }
+
       const formData = new FormData();
-      formData.append('file', { uri: finalUri, name: uploadFileName, type: mimeType } as any);
-      const apiResponse = await fetch('http://192.168.1.161:5000/api/analyze', { method: 'POST', body: formData });
+      formData.append('file', { 
+        uri: fileUri, 
+        name: uploadFileName, 
+        type: mimeType 
+      } as any);
+
+      const apiResponse = await fetch('http://172.20.10.2:5000/api/analyze', { 
+        method: 'POST', 
+        body: formData 
+      });
       const aiData = await apiResponse.json();
 
       if (!aiData.success) throw new Error(aiData.error || 'Yapay zeka analizinde hata oluştu.');
@@ -191,15 +212,29 @@ export default function ProcessScreen() {
       {result ? (
         <View style={styles.carouselWrapper}>
           <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.carouselScroll}>
-            <View style={styles.slide}><Image source={{ uri: result.analyzedImg }} style={styles.previewImage} resizeMode="contain" /></View>
-            <View style={styles.slide}><Image source={{ uri: result.segmentedImg }} style={styles.previewImage} resizeMode="contain" /></View>
             <View style={styles.slide}>
-              {isImageFile(result.originalImg) ? ( <Image source={{ uri: result.originalImg }} style={styles.previewImage} resizeMode="contain" /> ) : (
-                 <View style={styles.placeholderBox}><Text style={styles.placeholderText}>📄 Dosya Kaydedildi</Text><Text style={styles.placeholderSubtext}>Bu bir belge dosyasıdır.</Text></View>
+              <Image source={{ uri: result.analyzedImg }} style={styles.previewImage} resizeMode="contain" />
+              <Text style={styles.imageBadge}>Cobb Açısı Analizi</Text>
+            </View>
+            <View style={styles.slide}>
+              <Image source={{ uri: result.segmentedImg }} style={styles.previewImage} resizeMode="contain" />
+              <Text style={styles.imageBadge}>Omurga Segmentasyonu</Text>
+            </View>
+            <View style={styles.slide}>
+              {isImageFile(result.originalImg) ? ( 
+                <>
+                  <Image source={{ uri: result.originalImg }} style={styles.previewImage} resizeMode="contain" /> 
+                  <Text style={styles.imageBadge}>Orijinal Görüntü</Text>
+                </>
+              ) : (
+                <View style={styles.placeholderBox}>
+                  <Text style={styles.placeholderText}>📄 Dosya Kaydedildi</Text>
+                  <Text style={styles.placeholderSubtext}>Bu bir belge dosyasıdır.</Text>
+                </View>
               )}
             </View>
           </ScrollView>
-          <Text style={styles.swipeHint}>💡 Omurga segmentasyonu ve ham görüntü için yana kaydırın 👉</Text>
+          <Text style={styles.swipeHint}>Omurga segmentasyonu ve ham görüntü için yana kaydırınız.</Text>
         </View>
       ) : (
         <View style={styles.imageContainer}>
@@ -235,7 +270,6 @@ export default function ProcessScreen() {
             <View style={styles.resultRow}><Text style={styles.resultLabel}>Durum:</Text><Text style={[styles.resultRisk, { color: result.riskColor }]}>{result.risk}</Text></View>
           </View>
           
-          {/* GÜNCELLENMİŞ DİNAMİK TAVSİYE KARTI */}
           {getRecommendationData(result.angle) && (
             <View style={styles.recCard}>
               <Text style={styles.recMainTitle}>{getRecommendationData(result.angle)?.title}</Text>
@@ -250,12 +284,10 @@ export default function ProcessScreen() {
               <Text style={styles.recSubTitle}>Genel Tavsiye:</Text>
               <Text style={styles.recText}>{getRecommendationData(result.angle)?.general}</Text>
 
-              {/* Eğer Kategoriye Özel Fotoğraf Varsa Göster */}
               {getRecommendationData(result.angle)?.imagePath && (
                 <Image source={getRecommendationData(result.angle)?.imagePath} style={styles.recImage} resizeMode="contain" />
               )}
 
-              {/* YENİ EKLENEN SABİT TAVSİYE UYARISI */}
               <View style={styles.recWarningBox}>
                 <Text style={styles.recWarningText}>
                   Bu öneriler genel bilgilendirme amaçlıdır. Uygulamanın koyduğu derece bir ön analizdir, kesin tedavi planı için lütfen ortopedi uzmanına danışınız.
@@ -295,10 +327,10 @@ const styles = StyleSheet.create({
   resultRisk: { fontSize: 16, fontWeight: 'bold' },
   carouselWrapper: { width: '100%', marginBottom: 20 },
   carouselScroll: { width: IMAGE_BOX_WIDTH, height: 350, backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', borderWidth: 2, borderColor: '#27ae60' },
-  slide: { width: IMAGE_BOX_WIDTH, height: 350, justifyContent: 'center', alignItems: 'center' },
+  slide: { width: IMAGE_BOX_WIDTH, height: 350, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  imageBadge: { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(44, 62, 80, 0.8)', color: 'white', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, fontSize: 12, fontWeight: 'bold', overflow: 'hidden' },
   swipeHint: { textAlign: 'center', color: '#7f8c8d', fontSize: 12, marginTop: 8, fontStyle: 'italic' },
   
-  // YENİ TAVSİYE KARTI STİLLERİ
   recCard: { backgroundColor: '#f0f8ff', borderColor: '#cce7ff', borderWidth: 1, padding: 15, borderRadius: 12, marginBottom: 15, width: '100%' },
   recMainTitle: { fontSize: 18, fontWeight: 'bold', color: '#0056b3', marginBottom: 5 },
   recDesc: { fontSize: 14, color: '#333', marginBottom: 15, fontStyle: 'italic' },
@@ -306,7 +338,6 @@ const styles = StyleSheet.create({
   recText: { fontSize: 14, color: '#444', lineHeight: 20 },
   recImage: { width: '100%', height: 200, borderRadius: 8, marginTop: 15, backgroundColor: 'white' },
   
-  // YENİ TAVSİYE UYARISI STİLLERİ
   recWarningBox: { marginTop: 15, padding: 10, backgroundColor: '#ffeeba', borderRadius: 8, borderWidth: 1, borderColor: '#ffdf7e' },
   recWarningText: { fontSize: 12, color: '#856404', fontStyle: 'italic', textAlign: 'center', fontWeight: '500' }
 });
