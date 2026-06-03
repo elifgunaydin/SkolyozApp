@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, Platform } from 'react-native';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons'; 
 
 const screenWidth = Dimensions.get('window').width;
 const IMAGE_BOX_WIDTH = screenWidth - 40; 
@@ -29,7 +30,6 @@ export default function DetailScreen() {
     try { return decodeURIComponent(raw).trim(); } catch (e) { return raw.trim(); }
   };
 
-  // GÜNCELLENMİŞ: 5 KATEGORİLİ TAVSİYE FONKSİYONU
   const getRecommendationData = (angleValueStr: string) => {
     const angleValue = parseFloat(angleValueStr);
     if (isNaN(angleValue)) return null;
@@ -93,15 +93,37 @@ export default function DetailScreen() {
   ];
 
   const formatDate = (dateString: string) => {
-    if (!dateString || dateString === 'undefined') return 'Tarih Yok';
-    const date = new Date(dateString);
-    date.setHours(date.getHours() + 3);
-    return `${String(date.getDate()).padStart(2, '0')} ${["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][date.getMonth()]} ${date.getFullYear()}  Saat: ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    if (!dateString || dateString === 'undefined' || dateString === 'null') return 'Tarih Yok';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Tarih Yok';
+      date.setHours(date.getHours() + 3);
+      return `${String(date.getDate()).padStart(2, '0')} ${["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][date.getMonth()]} ${date.getFullYear()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    } catch (e) {
+      return 'Tarih Yok';
+    }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: 'Detay', headerBackTitle: 'Geri' }} />
+      <Stack.Screen 
+        options={{ 
+          headerTitle: 'Detay',
+          headerTitleStyle: { color: '#1e293b' },
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => router.replace('/dashboard')} 
+              // Geri butonunun sıkışmaması için padding eklendi ve margin düzeltildi
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingRight: 15, marginLeft: Platform.OS === 'ios' ? -5 : 0 }}
+            >
+              <Ionicons name="chevron-back" size={24} color="#1e293b" />
+              <Text style={{ color: '#1e293b', fontSize: 16, marginLeft: 2 }}>Geri</Text>
+            </TouchableOpacity>
+          ),
+          headerBackVisible: false, 
+          headerShadowVisible: false, 
+        }} 
+      />
 
       <View style={styles.headerBox}>
         <Text style={styles.title}>Analiz Detayı</Text>
@@ -136,7 +158,6 @@ export default function DetailScreen() {
             <View style={styles.resultRow}><Text style={styles.resultLabel}>Durum:</Text><Text style={[styles.resultRisk, { color: diagnosisColor }]}>{diagnosis}</Text></View>
           </View>
 
-          {/* GÜNCELLENMİŞ DİNAMİK TAVSİYE KARTI */}
           {getRecommendationData(cobbAngle) && (
             <View style={styles.recCard}>
               <Text style={styles.recMainTitle}>{getRecommendationData(cobbAngle)?.title}</Text>
@@ -151,12 +172,10 @@ export default function DetailScreen() {
               <Text style={styles.recSubTitle}>Genel Tavsiye:</Text>
               <Text style={styles.recText}>{getRecommendationData(cobbAngle)?.general}</Text>
 
-              {/* Eğer Kategoriye Özel Fotoğraf Varsa Göster */}
               {getRecommendationData(cobbAngle)?.imagePath && (
                 <Image source={getRecommendationData(cobbAngle)?.imagePath} style={styles.recImage} resizeMode="contain" />
               )}
 
-              {/* YENİ EKLENEN SABİT TAVSİYE UYARISI */}
               <View style={styles.recWarningBox}>
                 <Text style={styles.recWarningText}>
                   Bu değerlendirme yalnızca bilgilendirme amaçlıdır. Hesaplanan Cobb açısı ön analiz niteliğindedir. Kesin tanı ve tedavi planı için lütfen bir ortopedi uzmanına başvurunuz.
@@ -167,7 +186,7 @@ export default function DetailScreen() {
         </>
       )}
 
-      <TouchableOpacity style={styles.closeButton} onPress={() => { try { if (router.canGoBack()) router.back(); else router.replace('/dashboard'); } catch (error) { router.replace('/dashboard'); } }}>
+      <TouchableOpacity style={styles.closeButton} onPress={() => router.replace('/dashboard')}>
         <Text style={styles.closeButtonText}>Geri Dön</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -199,7 +218,6 @@ const styles = StyleSheet.create({
   closeButton: { backgroundColor: '#bdc3c7', width: '100%', padding: 18, borderRadius: 10, alignItems: 'center', marginBottom: 30 },
   closeButtonText: { color: '#2c3e50', fontSize: 16, fontWeight: 'bold' },
   
-  // YENİ TAVSİYE KARTI STİLLERİ
   recCard: { backgroundColor: '#f0f8ff', borderColor: '#cce7ff', borderWidth: 1, padding: 15, borderRadius: 12, marginBottom: 20, width: '100%' },
   recMainTitle: { fontSize: 18, fontWeight: 'bold', color: '#0056b3', marginBottom: 5 },
   recDesc: { fontSize: 14, color: '#333', marginBottom: 15, fontStyle: 'italic' },
@@ -207,7 +225,6 @@ const styles = StyleSheet.create({
   recText: { fontSize: 14, color: '#444', lineHeight: 20 },
   recImage: { width: '100%', height: 200, borderRadius: 8, marginTop: 15, backgroundColor: 'white' },
   
-  // YENİ TAVSİYE UYARISI STİLLERİ
   recWarningBox: { marginTop: 15, padding: 10, backgroundColor: '#ffeeba', borderRadius: 8, borderWidth: 1, borderColor: '#ffdf7e' },
   recWarningText: { fontSize: 12, color: '#856404', fontStyle: 'italic', textAlign: 'center', fontWeight: '500' }
 });
